@@ -1,17 +1,21 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using QandA.Hubs;
 
 namespace Core3Api.Controllers;
 [ApiController]
 [Route("api/[controller]/[action]")]
 public class DataController : ControllerBase
 {
-    #region Get Request
     private readonly IDataRepository _dataRepository;
-    public DataController(IDataRepository dataRepository)
+    private readonly IHubContext<QuestionsHub> _questionHubContext;
+    public DataController(IDataRepository dataRepository, IHubContext<QuestionsHub> questionHubContext)
     {
         _dataRepository = dataRepository;
+        _questionHubContext = questionHubContext;
     }
 
+    #region Get Request
     [HttpGet]
     public IEnumerable<QuestionGetManyResponse> GetQuestions()
     {
@@ -57,7 +61,7 @@ public class DataController : ControllerBase
         return _dataRepository.GetUnansweredQuestions().GetAwaiter().GetResult();
     }
     #endregion
-    #region Post Request
+    #region Post, Put Request
     [HttpPost]
     public ActionResult<QuestionGetSingleResponse> PostQuestion(QuestionPostRequest questionPostRequest)
     {
@@ -88,6 +92,10 @@ public class DataController : ControllerBase
             UserName = "bob.test@test.com",
             Created = DateTime.UtcNow
         });
+        // SignalR Hubs
+        // _questionHubContext.Clients
+        //                     .Group($"Question-{answerPostRequest.QuestionId.Value}")
+        //                     .SendAsync("ReceiveQuestion", _dataRepository.GetQuestion(answerPostRequest.QuestionId.Value));
         return savedAnswer;
     }
 
@@ -106,6 +114,8 @@ public class DataController : ControllerBase
     }
 
     #endregion
+    #region Delete Request
+
 
     [HttpDelete("{questionId}")]
     public ActionResult DeleteQuestion(int questionId)
@@ -118,4 +128,6 @@ public class DataController : ControllerBase
         _dataRepository.DeleteQuestion(questionId);
         return NoContent();
     }
+    #endregion
+
 }
