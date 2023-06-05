@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using QandA.Hubs;
+using QandA.Data;
 
 namespace Core3Api.Controllers;
 [ApiController]
@@ -8,11 +8,13 @@ namespace Core3Api.Controllers;
 public class DataController : ControllerBase
 {
     private readonly IDataRepository _dataRepository;
-    private readonly IHubContext<QuestionsHub> _questionHubContext;
-    public DataController(IDataRepository dataRepository, IHubContext<QuestionsHub> questionHubContext)
+    private readonly IQuestionCache _cache;
+    // private readonly IHubContext<QuestionsHub> _questionHubContext;
+    public DataController(IDataRepository dataRepository, IQuestionCache questionCache)
     {
         _dataRepository = dataRepository;
-        _questionHubContext = questionHubContext;
+        _cache = questionCache;
+        // _questionHubContext = questionHubContext;
     }
 
     #region Get Request
@@ -23,12 +25,19 @@ public class DataController : ControllerBase
     }
 
     [HttpGet]
-    [Route("{search}")]
-    public IEnumerable<QuestionGetManyResponse> GetQuestions(string search)
+    [Route("{search?}/{includeAnswers}")]
+    public IEnumerable<QuestionGetManyResponse> GetQuestions(string? search, bool includeAnswers)
     {
         if (string.IsNullOrEmpty(search))
         {
-            return _dataRepository.GetQuestions().GetAwaiter().GetResult();
+            if (includeAnswers)
+            {
+                return _dataRepository.GetQuestionsWithAnswers();
+            }
+            else
+            {
+                return _dataRepository.GetQuestions().GetAwaiter().GetResult();
+            }
         }
         else
         {
@@ -47,10 +56,15 @@ public class DataController : ControllerBase
     [Route("{questionId}")]
     public ActionResult GetQuestion(int questionId)
     {
-        var question = _dataRepository.GetQuestion(questionId).GetAwaiter().GetResult();
+        var question = _cache.Get(questionId);
         if (question == null)
         {
-            return NotFound();
+            question = _dataRepository.GetQuestion(questionId).GetAwaiter().GetResult();
+            if (question == null)
+            {
+                return NotFound();
+            }
+            _cache.Set(question);
         }
         return Ok(question);
     }
@@ -96,6 +110,7 @@ public class DataController : ControllerBase
         // _questionHubContext.Clients
         //                     .Group($"Question-{answerPostRequest.QuestionId.Value}")
         //                     .SendAsync("ReceiveQuestion", _dataRepository.GetQuestion(answerPostRequest.QuestionId.Value));
+        _cache.Remove(answerPostRequest.QuestionId.Value);
         return savedAnswer;
     }
 
@@ -126,6 +141,7 @@ public class DataController : ControllerBase
             return NotFound();
         }
         _dataRepository.DeleteQuestion(questionId);
+        _cache.Remove(questionId);
         return NoContent();
     }
     #endregion

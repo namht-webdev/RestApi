@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Models.MyDbContext;
-using QandA.Hubs;
+using QandA.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,7 +10,8 @@ builder.Services.AddDbContext<MyDBContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("MyDb"));
 });
-
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IQuestionCache, QuestionCache>();
 builder.Services.AddControllers();
 builder.Services.AddScoped<DataQuery>();
 builder.Services.AddScoped<IDataRepository, DataRepository>();

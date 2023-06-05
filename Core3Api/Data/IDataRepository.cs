@@ -10,4 +10,5 @@ public interface IDataRepository
     QuestionGetSingleResponse PutQuestion(int questionId, QuestionPutRequest question);
     void DeleteQuestion(int questionId);
     AnswerGetResponse PostAnswer(AnswerPostFullRequest answer);
+    IEnumerable<QuestionGetManyResponse> GetQuestionsWithAnswers();
 }

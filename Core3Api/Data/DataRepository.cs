@@ -15,8 +15,6 @@ public class DataRepository : IDataRepository
         }
     }
 
-
-
     public DataRepository(DataQuery dataQuery)
     {
         _dataQuery = dataQuery;
@@ -134,6 +132,17 @@ public class DataRepository : IDataRepository
         _dataQuery.DataNotReturn($"Question_Put '{questionId}', '{question.Title}', '{question.Content}'");
         return GetQuestion(questionId).GetAwaiter().GetResult();
 
+    }
+
+
+    public IEnumerable<QuestionGetManyResponse> GetQuestionsWithAnswers()
+    {
+        IEnumerable<QuestionGetManyResponse> questions = _dataQuery.DataListReturn<QuestionGetManyResponse>("Question_GetMany").GetAwaiter().GetResult();
+        foreach (var question in questions)
+        {
+            question.Answers = _dataQuery.DataListReturn<AnswerGetResponse>($"Answer_Get_ByQuestionId {question.QuestionId}").GetAwaiter().GetResult().ToList();
+        }
+        return questions;
     }
 }
 
