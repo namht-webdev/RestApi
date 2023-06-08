@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using QandA.Data;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using System.Text.Json;
+using QandA.Data.Models;
 
 namespace Core3Api.Controllers;
 [ApiController]
@@ -9,12 +13,18 @@ public class DataController : ControllerBase
 {
     private readonly IDataRepository _dataRepository;
     private readonly IQuestionCache _cache;
+    // Authentication && Authorization
+    private readonly IHttpClientFactory _clientFactory;
+    private readonly string _auth0UserInfo;
     // private readonly IHubContext<QuestionsHub> _questionHubContext;
-    public DataController(IDataRepository dataRepository, IQuestionCache questionCache)
+    public DataController(IDataRepository dataRepository, IQuestionCache questionCache, IHttpClientFactory clientFactory, IConfiguration configuration)
     {
         _dataRepository = dataRepository;
         _cache = questionCache;
         // _questionHubContext = questionHubContext;
+        _clientFactory = clientFactory;
+        _auth0UserInfo = $"{configuration["Auth0:Authority"]}userinfo";
+
     }
 
     #region Get Request
@@ -76,6 +86,7 @@ public class DataController : ControllerBase
     }
     #endregion
     #region Post, Put Request
+    [Authorize]
     [HttpPost]
     public ActionResult<QuestionGetSingleResponse> PostQuestion(QuestionPostRequest questionPostRequest)
     {
@@ -83,13 +94,14 @@ public class DataController : ControllerBase
         {
             Title = questionPostRequest.Title,
             Content = questionPostRequest.Content,
-            UserId = "1",
-            UserName = "bob.test@test.com",
+            UserId = User.FindFirst(ClaimTypes.NameIdentifier).Value,
+            UserName = GetUserName().GetAwaiter().GetResult(),
             Created = DateTime.UtcNow
         });
         return CreatedAtAction(nameof(GetQuestion), new { questionId = savedQuestion.QuestionId }, savedQuestion);
     }
 
+    [Authorize]
     [HttpPost("answer")]
     public ActionResult<AnswerGetResponse> PostAnswer(AnswerPostRequest answerPostRequest)
     {
@@ -114,6 +126,7 @@ public class DataController : ControllerBase
         return savedAnswer;
     }
 
+    [Authorize(Policy = "MustBeQuestionAuthor")]
     [HttpPut("{questionId}")]
     public ActionResult<QuestionGetSingleResponse> PutQuestion(int questionId, QuestionPutRequest questionPutRequest)
     {
@@ -132,6 +145,7 @@ public class DataController : ControllerBase
     #region Delete Request
 
 
+    [Authorize(Policy = "MustBeQuestionAuthor")]
     [HttpDelete("{questionId}")]
     public ActionResult DeleteQuestion(int questionId)
     {
@@ -145,5 +159,31 @@ public class DataController : ControllerBase
         return NoContent();
     }
     #endregion
+    private async Task<string> GetUserName()
+    {
+        var request = new HttpRequestMessage(
+        HttpMethod.Get,
+        _auth0UserInfo);
+        request.Headers.Add(
+        "Authorization",
+        Request.Headers["Authorization"].First());
+        var client = _clientFactory.CreateClient();
+        var response = await client.SendAsync(request);
+        if (response.IsSuccessStatusCode)
+        {
+            var jsonContent =
+            await response.Content.ReadAsStringAsync();
+            var user = JsonSerializer.Deserialize<User>(jsonContent,
+            new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+            return user.Name;
+        }
+        else
+        {
+            return "";
+        }
+    }
 
 }
